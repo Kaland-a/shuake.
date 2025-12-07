@@ -34,7 +34,7 @@ menu = [
     '0.退出脚本'
 ]
 
-current_file = os.path.abspath(sys.executable)  # 如果没有打包直接运行,则参数应改为 __file__
+current_file = os.path.abspath(sys.executable)  # 如果没有打包直接运行，则参数应改为 __file__
 current_dir = os.path.dirname(current_file)
 config_dir = os.path.join(current_dir, 'config')
 config_file = os.path.join(config_dir, 'DGUT_LMS.json')
@@ -53,7 +53,7 @@ def check_config():
         with open(config_file, 'w', encoding='utf-8') as f:
             json.dump(config_template, f, ensure_ascii=False, indent=2)
 
-        print(f'配置文件不存在,已为您创建配置文件: {config_file}')
+        print(f'配置文件不存在，已为您创建配置文件: {config_file}')
 
 
 def check_browser():
@@ -108,7 +108,7 @@ def main():
         print((_name + ' v' + _version).center(40, '-'))
         for item in menu:
             print(item)
-        print(("作者:" + _author).center(40, '-'))
+        print(("作者：" + _author).center(40, '-'))
 
         try:
             input_menu = ord(msvcrt.getch())
@@ -119,11 +119,11 @@ def main():
                 try:
                     dp = browser.get_tab(title='测验')
                 except RuntimeError:
-                    print('没有找到测验标签页。是否没有打开测验标签页?\n按任意键继续...')
+                    print('没有找到测验标签页。是否没有打开测验标签页？\n按任意键继续...')
                     msvcrt.getch()
                     continue
                 ac = Actions(dp)
-                print('请确保浏览器打开的标签页为做题页面,然后按下 Enter 继续...')
+                print('请确保浏览器打开的标签页为做题页面，然后按下 Enter 继续...')
                 while True:
                     key = ord(msvcrt.getch())
                     if key == 13:
@@ -134,28 +134,16 @@ def main():
 
                 # 解析 URL 中的数字
                 try:
-                    a = re.findall(r'\d+', url)
+                    a = re.findall('\d+', url)
                 except TypeError:
                     print('Url 错误, 可能是你没有打开做题页面\n按任意键继续...')
                     msvcrt.getch()
                     continue
 
-                # 构建 API 请求URL - 修改为 DGUT LMS 的 API 地址
+                # 构建 API 请求URL - DGUT使用不同的域名
                 try:
-                    # 从URL中提取 ocId 和 homeworkId
-                    ocId = None
-                    homeworkId = None
-                    for i, num in enumerate(a):
-                        if i == 0:
-                            ocId = num
-                        elif i == 1:
-                            homeworkId = num
-                    
-                    if not ocId or not homeworkId:
-                        raise ValueError("无法从URL中提取必要参数")
-                    
-                    xhr_url = f'https://lms.dgut.edu.cn/homeworkapi/quiz/homework/stu/questions?homeworkId={homeworkId}&ocId={ocId}&showAnswer=true'
-                except (IndexError, TypeError, ValueError):
+                    xhr_url = f'https://lms.dgut.edu.cn/homeworkapi/quiz/homework/stu/questions?homeworkId={a[1]}&ocId={a[0]}&showAnswer=true'
+                except (IndexError, TypeError):
                     print('Url 错误, 可能是你没有打开做题页面\n按任意键继续...')
                     msvcrt.getch()
                     continue
@@ -175,38 +163,17 @@ def main():
 
                 # 请求 API 获取答案
                 try:
-                    print(f'\n正在请求API...')
-                    print(f'请求URL: {xhr_url}')
-                    print(f'Token: {authorization[:20]}...' if authorization else 'Token: None')
-                    
                     xhr_response = requests.get(url=xhr_url, headers=xhr_headers)
-                    print(f'响应状态码: {xhr_response.status_code}')
-                    
-                    # 打印响应内容用于调试
-                    print(f'响应内容: {xhr_response.text[:500]}...')
-                    
                     xhr_json = xhr_response.json()
-                    
                     # 验证 JSON 结构
                     if 'result' not in xhr_json:
-                        print(f'\n完整响应JSON: {json.dumps(xhr_json, ensure_ascii=False, indent=2)}')
                         raise KeyError('result')
                 except KeyError:
-                    print('\n读取 json 键值对错误')
-                    print('API返回的数据结构可能不正确')
-                    print('请检查以上输出的响应内容\n按任意键继续...')
-                    msvcrt.getch()
-                    continue
-                except requests.exceptions.JSONDecodeError:
-                    print(f'\nAPI返回的不是有效的JSON格式')
-                    print(f'原始响应: {xhr_response.text}')
-                    print('按任意键继续...')
+                    print('读取 json 键值对错误\n可能是你粘贴了错误的 Url 或 Authorization ?\n按任意键继续...')
                     msvcrt.getch()
                     continue
                 except Exception as why:
-                    print(f'\n请求失败: {str(why)}')
-                    print(f'错误类型: {type(why).__name__}')
-                    print('按任意键继续...')
+                    print(f'请求失败: {str(why)}\n按任意键继续...')
                     msvcrt.getch()
                     continue
 
@@ -215,65 +182,94 @@ def main():
                 for idx, result in enumerate(xhr_json['result']):
                     correct_answer[idx] = result.get('correctAnswer', [])
 
-                # 自动答题逻辑
+                print(f'成功获取 {len(correct_answer)} 道题目的答案，开始自动答题...\n')
+
+                # 自动答题逻辑 - 根据DGUT的页面结构修改
                 for idx in correct_answer:
                     answers = correct_answer[idx]
                     if not answers:
+                        print(f'第 {idx + 1} 题没有答案，跳过')
                         continue
 
-                    # 处理单选题
-                    if len(answers) == 1 and answers[0] in ('A', 'B', 'C', 'D', 'E'):
-                        answer_map = {'A': 1, 'B': 2, 'C': 3, 'D': 4, 'E': 5}
-                        answer_idx = answer_map.get(answers[0], 0)
-                        if answer_idx:
-                            try:
-                                xpath = f'xpath://*[@id="app"]/div/div[1]/div[2]/div/div[1]/div/div/ul/li[{idx + 1}]/div[2]/ul/li[{answer_idx}]/div/label/span[1]/input'
-                                element = dp.ele(xpath)
-                                dp.run_js('arguments[0].click()', element)
-                            except ElementNotFoundError:
-                                print(f'未找到单选题元素 (第{idx + 1}题),可能是页面结构变化')
-                                continue
+                    try:
+                        # 处理单选题和多选题 - 使用class选择器定位选项
+                        if all(a in ('A', 'B', 'C', 'D', 'E', 'F', 'G') for a in answers):
+                            answer_map = {'A': 0, 'B': 1, 'C': 2, 'D': 3, 'E': 4, 'F': 5, 'G': 6}
+                            
+                            # 尝试找到题目容器
+                            question_containers = dp.eles('css:.question-item')
+                            if idx < len(question_containers):
+                                question_container = question_containers[idx]
+                                
+                                # 在题目容器内查找选项
+                                choice_elements = question_container.eles('css:.choice-title')
+                                
+                                for ans in answers:
+                                    answer_idx = answer_map.get(ans)
+                                    if answer_idx is not None and answer_idx < len(choice_elements):
+                                        try:
+                                            # 点击选项标题所在的div
+                                            choice_element = choice_elements[answer_idx]
+                                            dp.run_js('arguments[0].click()', choice_element)
+                                            print(f'第 {idx + 1} 题选择了选项 {ans}')
+                                            time.sleep(0.1)
+                                        except Exception as e:
+                                            print(f'第 {idx + 1} 题点击选项 {ans} 失败: {e}')
+                                            continue
 
-                    # 处理多选题
-                    elif len(answers) > 1 and all(a in ('A', 'B', 'C', 'D', 'E') for a in answers):
-                        answer_map = {'A': 1, 'B': 2, 'C': 3, 'D': 4, 'E': 5}
-                        for ans in answers:
-                            answer_idx = answer_map.get(ans, 0)
-                            if answer_idx:
-                                try:
-                                    xpath = f'xpath://*[@id="app"]/div/div[1]/div[2]/div/div[1]/div/div/ul/li[{idx + 1}]/div[2]/ul/li[{answer_idx}]/div/label/span[1]/input'
-                                    element = dp.ele(xpath)
-                                    dp.run_js('arguments[0].click()', element)
-                                except ElementNotFoundError:
-                                    print(f'未找到多选题元素 (第{idx + 1}题),可能是页面结构变化')
-                                    continue
+                        # 处理判断题
+                        elif len(answers) == 1 and answers[0] in ('true', 'false'):
+                            question_containers = dp.eles('css:.question-item')
+                            if idx < len(question_containers):
+                                question_container = question_containers[idx]
+                                
+                                # 查找判断题的radio输入框
+                                radio_inputs = question_container.eles('css:input[type="radio"]')
+                                
+                                # 遍历找到value匹配的radio按钮
+                                for radio in radio_inputs:
+                                    try:
+                                        radio_value = radio.attr('value')
+                                        if radio_value == answers[0]:
+                                            # 点击对应的radio输入框
+                                            dp.run_js('arguments[0].click()', radio)
+                                            print(f'第 {idx + 1} 题选择了 {"正确" if answers[0] == "true" else "错误"}')
+                                            break
+                                    except Exception as e:
+                                        print(f'第 {idx + 1} 题点击判断选项失败: {e}')
+                                        continue
 
-                    # 处理判断题
-                    elif len(answers) == 1 and answers[0] in ('true', 'false'):
-                        answer_idx = 1 if answers[0] == 'true' else 2
-                        try:
-                            xpath = f'xpath://*[@id="app"]/div/div[1]/div[2]/div/div[1]/div/div/ul/li[{idx + 1}]/div[2]/div[2]/label[{answer_idx}]/span[1]/input'
-                            element = dp.ele(xpath)
-                            dp.run_js('arguments[0].click()', element)
-                        except ElementNotFoundError:
-                            print(f'未找到判断题元素 (第{idx + 1}题),可能是页面结构变化')
-                            continue
+                        # 处理填空题
+                        else:
+                            question_containers = dp.eles('css:.question-item')
+                            if idx < len(question_containers):
+                                question_container = question_containers[idx]
+                                
+                                # 查找填空输入框
+                                blank_inputs = question_container.eles('css:.blank-item-input')
+                                
+                                # 如果答案数量和输入框数量匹配
+                                for i, answer in enumerate(answers):
+                                    if i < len(blank_inputs):
+                                        try:
+                                            input_element = blank_inputs[i]
+                                            ac.click(input_element)
+                                            # 清空并输入答案
+                                            ac.key_down('CTRL').key_down('a').key_up('CTRL').type(answer)
+                                            print(f'第 {idx + 1} 题第 {i + 1} 个空填入: {answer}')
+                                            time.sleep(0.1)
+                                        except Exception as e:
+                                            print(f'第 {idx + 1} 题填空失败: {e}')
+                                            continue
 
-                    # 处理填空题
-                    else:
-                        try:
-                            xpath = f'xpath://*[@id="app"]/div/div[1]/div[2]/div/div[1]/div/div/ul/li[{idx + 1}]/div[2]/div[2]/div[1]/div[1]/textarea'
-                            element = dp.ele(xpath)
-                            ac.click(element)
-                            answer = ''
-                            for i, a in enumerate(answers):
-                                answer += a + ('\n' if i != len(answers) - 1 else '')
-                            ac.key_down('CTRL').key_down('a').key_up('CTRL').type(answer).type('\n')
-                        except ElementNotFoundError:
-                            print(f'未找到填空题元素 (第{idx + 1}题),可能是页面结构变化')
-                            continue
+                    except ElementNotFoundError:
+                        print(f'第 {idx + 1} 题元素未找到，可能是页面结构变化')
+                        continue
+                    except Exception as e:
+                        print(f'第 {idx + 1} 题处理出错: {e}')
+                        continue
 
-                print('自动答题完成!按任意键继续')
+                print('\n自动答题完成！按任意键继续')
                 msvcrt.getch()
                 continue
 
@@ -296,7 +292,7 @@ if __name__ == '__main__':
     parser.add_argument('-b', '--browser', help='浏览器可执行文件路径')
     args = parser.parse_args()
 
-    # 如果提供了浏览器路径参数,则设置浏览器
+    # 如果提供了浏览器路径参数，则设置浏览器
     if args.browser:
         set_browser(args.browser)
 
@@ -306,7 +302,7 @@ if __name__ == '__main__':
         check_browser()
     except FileNotFoundError as e:
         print(e)
-        print("请正确配置浏览器路径,方法如下:")
+        print("请正确配置浏览器路径，方法如下：")
         print(f"1. 运行脚本时添加参数: -b 浏览器可执行文件完整路径 或者编辑配置文件 {config_file}")
         print("2. 示例: .\\DGUT_LMS.exe -b \"C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe\"")
         print("3. 可在浏览器地址栏输入 'edge://version' 或 'chrome://version' 查看安装路径")
