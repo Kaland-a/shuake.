@@ -105,7 +105,7 @@ class UlearningDGUT:
         config = configparser.ConfigParser()
         
         print("\n【账号配置】")
-        print("格式: dgut+学号,例如 dgut2023463030604")
+        print("格式: dgut+学号")
         username = input("账号: ").strip()
         
         if username.isdigit():
@@ -1028,4 +1028,5 @@ def main():
                 pass
 
 if __name__ == '__main__':
+
     main()
